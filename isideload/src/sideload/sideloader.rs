@@ -175,21 +175,34 @@ impl Sideloader {
                     ))?;
             }
 
-            // The synthetic sideloading app group is an iOS-side concern.
-            // Do not configure a watchOS App ID through the default iOS endpoint.
-            if watch_bundle_ids.contains(&app_id.identifier) {
-                continue;
-            }
+            // Watch applications need an authorized application group in their
+            // watchOS provisioning profile (e.g. HermesEnabler's MG access).
+            // Preserve the shared host app group, but configure it using the
+            // watchOS platform marker for Watch App IDs.
+            let is_watch_app = watch_bundle_ids.contains(&app_id.identifier);
+            let group_platform = is_watch_app.then_some(DeveloperDeviceType::Watchos);
 
             app_id
-                .ensure_group_feature(&mut self.dev_session, &team)
-                .await?;
+                .ensure_group_feature(
+                    &mut self.dev_session,
+                    &team,
+                    group_platform.clone(),
+                )
+                .await
+                .context(format!(
+                    "Failed to enable App Groups for {}",
+                    app_id.identifier
+                ))?;
 
             self.dev_session
-                .assign_app_group(&team, &app_group, app_id, None)
-                .await?;
+                .assign_app_group(&team, &app_group, app_id, group_platform)
+                .await
+                .context(format!(
+                    "Failed to assign App Group {} to {}",
+                    group_identifier, app_id.identifier
+                ))?;
 
-            if increased_memory_limit {
+            if !is_watch_app && increased_memory_limit {
                 self.dev_session
                     .add_increased_memory_limit(&team, app_id)
                     .await?;
@@ -236,6 +249,25 @@ impl Sideloader {
 
             let parsed_profile = ProvisioningProfile::parse(profile.encoded_profile.as_ref())?;
             let entitlements = parsed_profile.entitlements().clone();
+
+            // Never silently sign a Watch app without the group we requested.
+            // The installed app may launch but its MG backup will fail.
+            if watch_bundle_ids.contains(&bundle_id) {
+                let has_group = entitlements
+                    .get("com.apple.security.application-groups")
+                    .and_then(plist::Value::as_array)
+                    .is_some_and(|groups| {
+                        groups.iter().any(|group| {
+                            group.as_string() == Some(group_identifier.as_str())
+                        })
+                    });
+                if !has_group {
+                    bail!(
+                        "watchOS provisioning profile for {} lacks App Group {}.                          The Apple developer team may not authorize this capability.",
+                        bundle_id, group_identifier
+                    );
+                }
+            }
 
             provisioning_profiles.push((bundle_id, profile, entitlements));
         }

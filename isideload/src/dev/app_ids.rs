@@ -239,16 +239,22 @@ impl AppId {
         &mut self,
         dev_session: &mut DeveloperSession,
         team: &DeveloperTeam,
+        device_type: impl Into<Option<DeveloperDeviceType>> + Send,
     ) -> Result<(), Report> {
-        let app_group_feature_enabled = self.features.get_bool("APG3427HIY")?;
+        let app_group_feature_enabled = self
+            .features
+            .get("APG3427HIY")
+            .and_then(Value::as_boolean)
+            .unwrap_or(false);
 
         if !app_group_feature_enabled {
             let body = plist!(dict {
                 "APG3427HIY": true,
             });
             let new_features = dev_session
-                .update_app_id(team, self, body, None)
-                .await?
+                .update_app_id(team, self, body, device_type)
+                .await
+                .context("Failed to enable App Groups on developer app ID")?
                 .features;
             self.features = new_features;
         }
