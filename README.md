@@ -1,3 +1,5 @@
+> **Unofficial experimental Apple Watch companion support:** The tested watchOS App Group implementation lives on branch [`fix/watch-companion-appgroup-27.3b1`](https://github.com/AlsoSama/isideload/tree/fix/watch-companion-appgroup-27.3b1), pinned to [commit `323e5341`](https://github.com/AlsoSama/isideload/commit/323e5341b6f02a182e2c913a09ca43f553322758). The `main` branch is the upstream fork baseline. See [implementation notes](docs/EXPERIMENTAL_WATCH_COMPANION.md) and the [Windows build](https://github.com/AlsoSama/iloader/blob/main/docs/WINDOWS_WATCH_COMPANION.md). Not an official upstream release.
+
 # isideload
 
 [![Build isideload](https://github.com/nab138/isideload/actions/workflows/build.yml/badge.svg)](https://github.com/nab138/isideload/actions/workflows/build.yml)
