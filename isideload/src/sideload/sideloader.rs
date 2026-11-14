@@ -324,40 +324,50 @@ impl Sideloader {
             .ensure_device_registered(&team, &device_info.name, &device_info.udid, None)
             .await?;
 
-        // Apple Watch companions are exposed by the iPhone's companion_proxy.
-        // Register each paired Watch through Apple's watchOS developer endpoint
-        // before requesting watchOS provisioning profiles.
-        let mut provisioning_companion_proxy = CompanionProxy::connect(device_provider)
-            .await
-            .context("Failed to connect to Apple Watch companion proxy")?;
+        // Only iPhone apps containing a watchOS companion require the paired-Watch
+        // registry. In particular, iPadOS responds to get_device_registry() with
+        // UnsupportedDevice even when the IPA is a perfectly ordinary iPad app.
+        // Inspect the same bundle layout used by sign_app before requesting the
+        // iPhone-only companion_proxy service.
+        let includes_watch_companion = !Application::new(app_path.clone())?
+            .bundle
+            .watch_apps()
+            .is_empty();
 
-        let paired_watches = provisioning_companion_proxy
-            .get_device_registry()
-            .await
-            .context("Failed to list paired Apple Watch devices")?;
-
-        for watch_udid in paired_watches {
-            let watch_name = provisioning_companion_proxy
-                .get_value(&watch_udid, "DeviceName")
+        if includes_watch_companion {
+            // Register paired Watches before requesting watchOS provisioning profiles.
+            let mut provisioning_companion_proxy = CompanionProxy::connect(device_provider)
                 .await
-                .ok()
-                .and_then(|value| value.as_string().map(str::to_string))
-                .unwrap_or_else(|| "Apple Watch".to_string());
+                .context("A Watch companion IPA requires a paired iPhone with companion_proxy support")?;
 
-            self.dev_session
-                .ensure_device_registered(
-                    &team,
-                    &watch_name,
-                    &watch_udid,
-                    Some(DeveloperDeviceType::Watchos),
-                )
+            let paired_watches = provisioning_companion_proxy
+                .get_device_registry()
                 .await
-                .context("Failed to register paired Apple Watch as a development device")?;
+                .context("Cannot list paired Apple Watches; select the paired iPhone for Watch apps")?;
+
+            for watch_udid in paired_watches {
+                let watch_name = provisioning_companion_proxy
+                    .get_value(&watch_udid, "DeviceName")
+                    .await
+                    .ok()
+                    .and_then(|value| value.as_string().map(str::to_string))
+                    .unwrap_or_else(|| "Apple Watch".to_string());
+
+                self.dev_session
+                    .ensure_device_registered(
+                        &team,
+                        &watch_name,
+                        &watch_udid,
+                        Some(DeveloperDeviceType::Watchos),
+                    )
+                    .await
+                    .context("Failed to register paired Apple Watch as a development device")?;
+            }
+
+            // The iPhone companion proxy may be invalidated by an installation.
+            // Reconnect for post-install Watch transfer rather than reusing it.
+            drop(provisioning_companion_proxy);
         }
-
-        // companion_proxy can be invalidated while the iPhone app is installed.
-        // Do not reuse this provisioning connection for the post-install Watch transfer.
-        drop(provisioning_companion_proxy);
 
         let (signed_app_path, special_app) = self
             .sign_app(
