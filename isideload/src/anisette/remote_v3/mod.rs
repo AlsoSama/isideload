@@ -161,8 +161,8 @@ impl AnisetteProvider for RemoteV3AnisetteProvider {
 
     async fn get_client_info(&self) -> Result<AnisetteClientInfo, Report> {
         Ok(AnisetteClientInfo {
-            client_info: "<Mac15,7> <macOS;27.0;26A5378j> <com.apple.AuthKit/1 (com.apple.akd/1.0)>".to_string(),
-            user_agent: "akd/1.0 CFNetwork/808.1.4".to_string(),
+            client_info: "<MacBookPro13,3> <Mac OS X;10.12.6;16G29> <com.apple.AuthKit/1 (com.apple.akd/1.0)>".to_string(),
+            user_agent: "akd/1.0 CFNetwork/811.5.4 Darwin/16.7.0".to_string(),
         })
     }
 
